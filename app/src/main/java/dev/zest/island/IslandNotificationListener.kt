@@ -162,19 +162,28 @@ class IslandNotificationListener : NotificationListenerService() {
         val ongoingAct = try {
             ex.containsKey("android.ongoingActivityNoti.style") || ex.getBoolean("android.requestPromotedOngoing", false)
         } catch (_: Throwable) { false }
-        val primaryInfo = if (ongoingAct) cs(ex, "android.ongoingActivityNoti.primaryInfo") else ""
-        // Teks kedua: secondaryInfo; bila kosong / teks mentah "ambientData:..." cari kandidat lain di extras.
-        val secondaryInfo = if (!ongoingAct) "" else {
-            val cands = ArrayList<String>()
-            cands.add(cs(ex, "android.ongoingActivityNoti.secondaryInfo"))
-            try {
-                for (k in ex.keySet()) if (k.startsWith("android.ongoingActivityNoti.") && !k.endsWith("primaryInfo")) cands.add(cs(ex, k))
-            } catch (_: Throwable) {}
-            cands.add(cs(ex, Notification.EXTRA_SUB_TEXT))
-            cands.add(cs(ex, Notification.EXTRA_BIG_TEXT))
-            cands.add(text)
-            cands.firstOrNull { it.isNotEmpty() && !it.startsWith("ambientData:") && it.length < 120 } ?: ""
-        }
+        val primaryInfo = if (ongoingAct) listOf(
+            cs(ex, "android.ongoingActivityNoti.primaryInfo"),
+            cs(ex, "android.ongoingActivityNoti.nowbarPrimaryInfo")
+        ).firstOrNull { it.isNotEmpty() && !(it.startsWith("google_") && !it.contains(' ')) } ?: "" else ""
+        // Data chip One UI: ikon pertama/kedua (logo tim), teks chip (skor), info kedua.
+        fun ico(k: String): android.graphics.drawable.Drawable? = try {
+            if (!ongoingAct) null
+            else (if (android.os.Build.VERSION.SDK_INT >= 33) ex.getParcelable(k, android.graphics.drawable.Icon::class.java)
+                  else @Suppress("DEPRECATION") ex.getParcelable<android.graphics.drawable.Icon>(k))?.loadDrawable(this)
+        } catch (_: Throwable) { null }
+        val firstIco = ico("android.ongoingActivityNoti.firstIcon") ?: ico("android.ongoingActivityNoti.chipIcon")
+        val secondIco = ico("android.ongoingActivityNoti.secondIcon")
+        val chipText = if (ongoingAct) cs(ex, "android.ongoingActivityNoti.chipExpandedText") else ""
+        fun junk(t: String) = t.isEmpty() || t.startsWith("ambientData:") || t.length > 120 ||
+            (!t.contains(' ') && t.contains('_') && t == t.lowercase())   // tag/resource-name, bukan teks tampilan
+        val secondaryInfo = if (!ongoingAct) "" else listOf(
+            cs(ex, "android.ongoingActivityNoti.secondaryInfo"),
+            cs(ex, "android.ongoingActivityNoti.nowbarSecondaryInfo"),
+            cs(ex, "android.ongoingActivityNoti.description"),
+            cs(ex, Notification.EXTRA_SUB_TEXT),
+            text
+        ).firstOrNull { !junk(it) } ?: ""
         when {
             chrono || isCall || isClock || ongoingAct -> {
                 val item = IslandItem(
@@ -183,7 +192,9 @@ class IslandNotificationListener : NotificationListenerService() {
                     primaryInfo.ifEmpty { title.ifEmpty { app } },
                     secondaryInfo.ifEmpty { text.takeUnless { it.startsWith("ambientData:") }.orEmpty().ifEmpty { app } }
                 )
-                item.icon = icon
+                item.icon = firstIco ?: icon
+                item.icon2 = secondIco
+                item.chipText = chipText
                 item.tap = n.contentIntent
                 item.pkg = sbn.packageName
                 item.actions = (n.actions ?: emptyArray()).mapNotNull { a ->

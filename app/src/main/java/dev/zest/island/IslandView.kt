@@ -529,6 +529,7 @@ class IslandView(context: Context) : View(context) {
     private fun collapsedTargetW(): Float {
         val p = primary
         if (p == null) return idleD()   // bulat kecil hanya saat idle
+        if (p.kind == Kind.TIMER && !p.hasTimer && p.icon2 != null) return collapsedW + dp(40)   // [logo] 1-0 [logo]
         if (p == null || p.kind != Kind.NOTICE || p.title.isEmpty()) return collapsedW
         val gs = collapsedH * 0.56f
         val half = max(dp(11) + gs + dp(6), dp(12) + tNotice.measureText(p.title) + dp(6))
@@ -1046,6 +1047,20 @@ class IslandView(context: Context) : View(context) {
                 c.drawText(formatTimer(p, true), rx, midY - (fm.ascent + fm.descent) / 2f, tPill)
             }
             p.kind == Kind.MEDIA -> drawEq(c, rx - dp(20.5f), midY, min(h * 0.5f, dp(13)), ia, p.playing)
+            p.chipText.isNotEmpty() || p.icon2 != null -> {
+                // Gaya chip Samsung: logo 1 di kiri, skor di kanan kamera, logo 2 paling kanan.
+                var tx = rx
+                val s2 = h * 0.62f
+                if (p.icon2 != null) {
+                    drawIcon(c, p.icon2, rx - s2, midY - s2 / 2f, s2, ia)
+                    tx = rx - s2 - dp(4)
+                }
+                if (p.chipText.isNotEmpty()) {
+                    tPill.alpha = ia
+                    val fm = tPill.fontMetrics
+                    c.drawText(p.chipText, tx, midY - (fm.ascent + fm.descent) / 2f, tPill)
+                }
+            }
         }
     }
 
@@ -1273,6 +1288,15 @@ class IslandView(context: Context) : View(context) {
             tBig.alpha = ia
             val fm = tBig.fontMetrics
             c.drawText(formatTimer(i, false), x0 + blockW - dp(14), y0 + dp(32) - (fm.ascent + fm.descent) / 2f, tBig)
+        } else if (i.chipText.isNotEmpty() || i.icon2 != null) {
+            tBig.alpha = ia
+            val fm = tBig.fontMetrics
+            var rxx = x0 + blockW - dp(14)
+            if (i.icon2 != null) {
+                drawIcon(c, i.icon2, rxx - dp(26), y0 + dp(19), dp(26), ia)
+                rxx -= dp(34)
+            }
+            if (i.chipText.isNotEmpty()) c.drawText(i.chipText, rxx, y0 + dp(32) - (fm.ascent + fm.descent) / 2f, tBig)
         }
         // tombol aksi (Berhenti / Jeda / Tolak / Akhiri ...)
         if (hasActions(i)) {
