@@ -1198,9 +1198,11 @@ class IslandView(context: Context) : View(context) {
 
     private fun drawIcon(c: Canvas, d: Drawable?, x: Float, y: Float, size: Float, ia: Int) {
         if (d == null) return
-        d.setBounds(x.toInt(), y.toInt(), (x + size).toInt(), (y + size).toInt())
-        d.alpha = ia
-        d.draw(c)
+        try {
+            d.setBounds(x.toInt(), y.toInt(), (x + size).toInt(), (y + size).toInt())
+            d.alpha = ia
+            d.draw(c)
+        } catch (_: Throwable) {}
     }
 
     private fun drawSatellite(c: Canvas, item: IslandItem, cx: Float, cy: Float, a: Float) {

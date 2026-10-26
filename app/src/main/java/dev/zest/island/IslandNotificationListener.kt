@@ -106,6 +106,12 @@ class IslandNotificationListener : NotificationListenerService() {
     // ---- Notifikasi ----
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        try { handlePosted(sbn) } catch (t: Throwable) {
+            android.util.Log.e("ZestIsland", "onNotificationPosted failed for ${sbn.packageName}", t)
+        }
+    }
+
+    private fun handlePosted(sbn: StatusBarNotification) {
         if (sbn.packageName == OWN_PACKAGE) return
         val n = sbn.notification
         if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
