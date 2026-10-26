@@ -172,12 +172,23 @@ class IslandNotificationListener : NotificationListenerService() {
             else (if (android.os.Build.VERSION.SDK_INT >= 33) ex.getParcelable(k, android.graphics.drawable.Icon::class.java)
                   else @Suppress("DEPRECATION") ex.getParcelable<android.graphics.drawable.Icon>(k))?.loadDrawable(this)
         } catch (_: Throwable) { null }
-        val firstIco = ico("android.ongoingActivityNoti.firstIcon") ?: ico("android.ongoingActivityNoti.chipIcon")
-        val secondIco = ico("android.ongoingActivityNoti.secondIcon")
-        val chipText = if (ongoingAct) cs(ex, "android.ongoingActivityNoti.chipExpandedText") else ""
-        fun junk(t: String) = t.isEmpty() || t.startsWith("ambientData:") || t.length > 120 ||
+        // Skor/logo tim dari Google Sports ada di RemoteViews chip, bukan di teks extras.
+        val chipRv = if (ongoingAct) scanRv(sbn, "android.ongoingActivityNoti.chipExpandedView") else RvScan.EMPTY
+        val nowRv = if (ongoingAct && chipRv.texts.isEmpty()) scanRv(sbn, "android.ongoingActivityNoti.nowbarRemoteView") else RvScan.EMPTY
+        val expRv = if (ongoingAct) scanRv(sbn, "android.ongoingActivityNoti.expandedRemoteView") else RvScan.EMPTY
+        val chipSrc = if (chipRv.texts.isNotEmpty() || chipRv.images.isNotEmpty()) chipRv else nowRv
+        val scoreRe = Regex("""\d+\s*[-–:]\s*\d+""")
+        val rvChipText = chipSrc.texts.firstOrNull { scoreRe.containsMatchIn(it) } ?: chipSrc.texts.joinToString(" ")
+        val firstIco = ico("android.ongoingActivityNoti.firstIcon") ?: chipSrc.images.getOrNull(0)
+            ?: ico("android.ongoingActivityNoti.chipIcon")
+        val secondIco = ico("android.ongoingActivityNoti.secondIcon") ?: chipSrc.images.getOrNull(1)
+        val chipText = cs(ex, "android.ongoingActivityNoti.chipExpandedText").ifEmpty { rvChipText }
+        val rvSecondary = expRv.texts.filter { it != chipText }.maxByOrNull { it.length } ?: ""
+        Dbg.d { "rv chip=${chipRv.texts}/${chipRv.images.size} exp=${expRv.texts}" }
+        fun junk(t: String) = t.isEmpty() || t.startsWith("ambientData:") || t.startsWith("SPORTS:") || t.length > 160 ||
             (!t.contains(' ') && t.contains('_') && t == t.lowercase())   // tag/resource-name, bukan teks tampilan
         val secondaryInfo = if (!ongoingAct) "" else listOf(
+            rvSecondary,
             cs(ex, "android.ongoingActivityNoti.secondaryInfo"),
             cs(ex, "android.ongoingActivityNoti.nowbarSecondaryInfo"),
             cs(ex, "android.ongoingActivityNoti.description"),
@@ -284,6 +295,35 @@ class IslandNotificationListener : NotificationListenerService() {
             for (i in 0 until v.childCount) findChronometer(v.getChildAt(i))?.let { return it }
         }
         return null
+    }
+
+    private class RvScan(val texts: List<String>, val images: List<android.graphics.drawable.Drawable>) {
+        companion object { val EMPTY = RvScan(emptyList(), emptyList()) }
+    }
+
+    /** Terapkan RemoteViews dari extras lalu kumpulkan teks tampak & gambar (mis. skor dan logo tim). */
+    private fun scanRv(sbn: StatusBarNotification, key: String): RvScan {
+        return try {
+            val ex = sbn.notification.extras
+            val rv = (if (android.os.Build.VERSION.SDK_INT >= 33) ex.getParcelable(key, android.widget.RemoteViews::class.java)
+                      else @Suppress("DEPRECATION") ex.getParcelable<android.widget.RemoteViews>(key)) ?: return RvScan.EMPTY
+            val ctx = createPackageContext(rv.`package` ?: sbn.packageName, 0)
+            val root = rv.apply(ctx, FrameLayout(ctx))
+            val texts = ArrayList<String>()
+            val imgs = ArrayList<android.graphics.drawable.Drawable>()
+            fun walk(v: View) {
+                if (v.visibility != View.VISIBLE) return
+                if (v is android.widget.TextView) {
+                    val t = v.text?.toString()?.trim().orEmpty()
+                    if (t.isNotEmpty() && t !in texts) texts.add(t)
+                } else if (v is android.widget.ImageView) {
+                    v.drawable?.let { d -> imgs.add(d.constantState?.newDrawable()?.mutate() ?: d) }
+                }
+                if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+            walk(root)
+            RvScan(texts, imgs)
+        } catch (_: Throwable) { RvScan.EMPTY }
     }
 
     private fun cs(ex: android.os.Bundle, key: String): String = try {
