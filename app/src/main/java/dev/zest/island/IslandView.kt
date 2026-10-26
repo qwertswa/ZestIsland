@@ -525,7 +525,7 @@ class IslandView(context: Context) : View(context) {
 
     private fun collapsedTargetW(): Float {
         val p = primary
-        if (p == null || p.kind == Kind.MEDIA) return collapsedH   // bulat kecil (idle / musik)
+        if (p == null) return collapsedH   // bulat kecil hanya saat idle
         if (p == null || p.kind != Kind.NOTICE || p.title.isEmpty()) return collapsedW
         val gs = collapsedH * 0.56f
         val half = max(dp(11) + gs + dp(6), dp(12) + tNotice.measureText(p.title) + dp(6))
@@ -964,7 +964,7 @@ class IslandView(context: Context) : View(context) {
             drawNotice(c, p, left, w, midY, ia)
             return
         }
-        val circle = p.kind == Kind.MEDIA
+        val circle = false
         val s = if (circle) h * 0.78f else artSize()
         val ax = if (circle) left + (w - s) / 2f else left + dp(4)
         val ay = midY - s / 2f
