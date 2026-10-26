@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">Zest Island</string>
+    <string name="a11y_desc">Shows a Dynamic Island around the front camera (music, timers, calls, notifications, charging).</string>
+    <string name="notice_silent">Silent</string>
+    <string name="notice_vibrate">Vibrate</string>
+    <string name="notice_ring">Ring</string>
+    <string name="btn_auto">Enable automatically (needs priv-app)</string>
+    <string name="btn_a11y">Open Accessibility settings</string>
+    <string name="btn_notif">Open notification access</string>
+    <string name="btn_test">Test island</string>
+    <string name="test_title">Hello</string>
+    <string name="test_sub">Island is active</string>
+    <string name="st_perm">System permission: %1$s</string>
+    <string name="st_a11y">Accessibility: %1$s</string>
+    <string name="st_notif">Notification access: %1$s</string>
+    <string name="st_yes">granted</string>
+    <string name="st_no">not granted</string>
+    <string name="st_on">on</string>
+    <string name="st_off">off</string>
+</resources>

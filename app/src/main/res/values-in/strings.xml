@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">Zest Island</string>
+    <string name="a11y_desc">Menampilkan island di sekitar kamera depan (musik, timer, telepon, notifikasi, pengisian).</string>
+    <string name="notice_silent">Senyap</string>
+    <string name="notice_vibrate">Getar</string>
+    <string name="notice_ring">Dering</string>
+    <string name="btn_auto">Aktifkan otomatis (butuh priv-app)</string>
+    <string name="btn_a11y">Buka pengaturan Aksesibilitas</string>
+    <string name="btn_notif">Buka akses notifikasi</string>
+    <string name="btn_test">Tes island</string>
+    <string name="test_title">Halo</string>
+    <string name="test_sub">Island aktif</string>
+    <string name="st_perm">Izin sistem: %1$s</string>
+    <string name="st_a11y">Aksesibilitas: %1$s</string>
+    <string name="st_notif">Akses notifikasi: %1$s</string>
+    <string name="st_yes">ada</string>
+    <string name="st_no">tidak ada</string>
+    <string name="st_on">aktif</string>
+    <string name="st_off">mati</string>
+</resources>
