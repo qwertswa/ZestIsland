@@ -119,7 +119,7 @@ class IslandView(context: Context) : View(context) {
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, v, resources.displayMetrics)
 
     // Cutout A23: sekitar 61x23dp di tengah atas.
-    private var collapsedW = dp(118)
+    private var collapsedW = dp(100)
     private var collapsedH = dp(28)
     private var satD = collapsedH
     private val satGap = dp(4)
@@ -160,7 +160,7 @@ class IslandView(context: Context) : View(context) {
     private val blockBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
     private val iconBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
     private val glossShader = LinearGradient(
-        0f, 0f, 0f, 1f, intArrayOf(0x66FFFFFF, 0x1CFFFFFF, 0x08FFFFFF), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP
+        0f, 0f, 0f, 1f, intArrayOf(0x55FFFFFF, 0x18FFFFFF, 0x06FFFFFF), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP
     )
     private val rimShader = LinearGradient(
         0f, 0f, 1f, 1f, intArrayOf(0xB0FFFFFF.toInt(), 0x18FFFFFF, 0x60FFFFFF), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
@@ -333,7 +333,7 @@ class IslandView(context: Context) : View(context) {
 
     /** Ukuran pill (dp) dari UN1CA Settings; 0 = bawaan. */
     fun setPillSize(wDp: Int, hDp: Int) {
-        val w = if (wDp <= 0) 118 else wDp.coerceIn(40, 300)
+        val w = if (wDp <= 0) 100 else wDp.coerceIn(40, 300)
         val h = if (hDp <= 0) 28 else hDp.coerceIn(16, 80)
         val nw = dp(w)
         val nh = dp(h)
@@ -566,6 +566,17 @@ class IslandView(context: Context) : View(context) {
         return ((x - curOffX() - p0) / (p1 - p0)).coerceIn(0f, 1f)
     }
 
+    // Tahan lama = buka lebar; ketuk sekali = buka aplikasinya (seperti iPhone).
+    private var longFired = false
+    private val longRun = Runnable {
+        if (downHit == Hit.PILL && !swiping && !expanded) {
+            longFired = true
+            press.to(1f, 0.35f, 0.6f)
+            try { performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) } catch (_: Throwable) {}
+            onToggle?.invoke()
+        }
+    }
+
     private var downHit = Hit.NONE
     private var downBlock: Block? = null
     private var downIdx = 0
@@ -662,6 +673,8 @@ class IslandView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x
                 swiping = false
+                longFired = false
+                removeCallbacks(longRun)
                 val (h, b) = hit(x, y)
                 downHit = h
                 downBlock = b
@@ -670,6 +683,7 @@ class IslandView(context: Context) : View(context) {
                 if (h == Hit.PILL) {
                     press.to(0.94f, 0.2f, 0.9f)
                     kick()
+                    if (!expanded) postDelayed(longRun, 380)
                 }
                 if (h == Hit.SEEK && b != null) {
                     seekBlock = b
@@ -681,7 +695,7 @@ class IslandView(context: Context) : View(context) {
             MotionEvent.ACTION_MOVE -> {
                 if (downHit == Hit.PILL && !expanded) {
                     val dx = x - downX
-                    if (!swiping && abs(dx) > dp(10)) swiping = true
+                    if (!swiping && abs(dx) > dp(10)) { swiping = true; removeCallbacks(longRun) }
                     if (swiping) {
                         dragX.snap(dx * 0.8f)
                         invalidateIsland()
@@ -697,6 +711,7 @@ class IslandView(context: Context) : View(context) {
                 return downHit != Hit.NONE
             }
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(longRun)
                 val was = downHit
                 val wasBlock = downBlock
                 val wasIdx = downIdx
@@ -740,11 +755,17 @@ class IslandView(context: Context) : View(context) {
                     return true
                 }
                 if (was == Hit.NONE) return false
+                if (longFired) { longFired = false; return true }
                 val (h, b) = hit(x, y)
+                if (h == Hit.PILL && was == Hit.PILL && !expanded) {
+                    primary?.let { openApp(it) }   // ketuk sekali -> aplikasinya
+                    return true
+                }
                 if (h == was && b === wasBlock && hitIdx == wasIdx) perform(h, b, wasIdx)
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(longRun)
                 seekBlock = null
                 if (swiping) { swiping = false; dragX.to(0f, 0.3f, 0.8f); kick() }
                 if (downHit == Hit.PILL) {
@@ -839,7 +860,7 @@ class IslandView(context: Context) : View(context) {
         c.scale(sx, sy, cx, pivotY)
         val alpha = (255 * v).toInt()
         val glassK = sa.value.coerceIn(0f, 1f)
-        bg.alpha = (alpha * (0.98f - 0.50f * glassK)).toInt()   // pil hampir hitam, kartu terbuka tembus pandang
+        bg.alpha = (alpha * (0.99f - 0.14f * glassK)).toInt()   // pil hampir hitam, kartu terbuka tembus pandang
 
         // pil utama
         rect.set(left, top, left + w, top + h)
@@ -847,7 +868,7 @@ class IslandView(context: Context) : View(context) {
         val r = min(sr.value, min(w, h) / 2f)
         c.drawRoundRect(rect, r, r, bg)
         if (glassK > 0.01f) {   // lapisan kaca terang saat kartu terbuka (gaya iOS 26)
-            tint.alpha = (alpha * 0.10f * glassK).toInt()
+            tint.alpha = (alpha * 0.07f * glassK).toInt()
             c.drawRoundRect(rect, r, r, tint)
         }
         drawGlass(c, left, top, w, h, r, alpha, glassK)
