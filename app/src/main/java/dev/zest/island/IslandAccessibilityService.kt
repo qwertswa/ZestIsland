@@ -273,12 +273,11 @@ class IslandAccessibilityService : AccessibilityService() {
         if (items.isEmpty()) {
             expanded = false
             stopTicker()
-            if (attached) {
-                view.bind(items, false)            // animasi menghilang dulu
-                updateTouchWindow()
-                handler.removeCallbacks(detachRun)
-                handler.postDelayed(detachRun, 450)
-            }
+            // Pil bulat kecil selalu tampil walau tidak ada apa-apa (menyusut ke sini).
+            handler.removeCallbacks(detachRun)
+            attach()
+            view.bind(items, false)
+            updateTouchWindow()
             return
         }
         handler.removeCallbacks(detachRun)

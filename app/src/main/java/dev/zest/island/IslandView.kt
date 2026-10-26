@@ -307,7 +307,7 @@ class IslandView(context: Context) : View(context) {
 
     /** Area sentuh saat ini (koordinat jendela) untuk touchable region. */
     fun touchBounds(out: Rect) {
-        if (hidden || (items.isEmpty() && vis.value < 0.02f)) { out.setEmpty(); return }
+        if (hidden || items.isEmpty()) { out.setEmpty(); return }
         val cx = cx() + (if (expanded) 0f else offX)
         val slop = dp(8)
         val hw: Float
@@ -362,18 +362,18 @@ class IslandView(context: Context) : View(context) {
     fun resetHidden() { hidden = false }
 
     fun bind(newItems: List<IslandItem>, isExpanded: Boolean) {
-        val entering = items.isEmpty() && newItems.isNotEmpty() && !isExpanded && !hidden && vis.value < 0.3f
+        val entering = items.isEmpty() && newItems.isNotEmpty() && !isExpanded && !hidden
         items = newItems
         expanded = isExpanded
         pickPrimary()
         syncBlocks()
         if (entering) {
             // Seperti "masuk ke island": titik kecil di kamera, lalu mengembang memantul jadi pil.
-            sw.snap(collapsedH * 0.8f)
-            sh.snap(collapsedH * 0.8f)
-            sr.snap(collapsedH * 0.4f)
+            sw.snap(collapsedH)
+            sh.snap(collapsedH)
+            sr.snap(collapsedH / 2f)
             sa.snap(0f)
-            vis.snap(0.5f)
+            vis.snap(1f)
             retarget()
             sw.to(collapsedTargetW(), 0.46f, 0.56f)
             sh.to(collapsedH, 0.40f, 0.58f)
@@ -525,6 +525,7 @@ class IslandView(context: Context) : View(context) {
 
     private fun collapsedTargetW(): Float {
         val p = primary
+        if (p == null || p.kind == Kind.MEDIA) return collapsedH   // bulat kecil (idle / musik)
         if (p == null || p.kind != Kind.NOTICE || p.title.isEmpty()) return collapsedW
         val gs = collapsedH * 0.56f
         val half = max(dp(11) + gs + dp(6), dp(12) + tNotice.measureText(p.title) + dp(6))
@@ -555,13 +556,13 @@ class IslandView(context: Context) : View(context) {
             sa.to(0f, 0.12f, 1f)
         }
         split.to(if (satItem != null && !expanded) 1f else 0f, 0.46f, 0.62f)
-        vis.to(if (items.isEmpty()) 0f else 1f, 0.22f, 1f)
+        vis.to(1f, 0.22f, 1f)
         kick()
     }
 
     // --------------------------------------------------------------- sentuh
 
-    private enum class Hit { NONE, PILL, PREV, PLAY, NEXT, OPEN, ACTION, SEEK }
+    private enum class Hit { NONE, PILL, PREV, PLAY, NEXT, STAR, OUTPUT, OPEN, ACTION, SEEK }
 
     private var seekBlock: Block? = null
     private var seekFrac = 0f
@@ -604,7 +605,7 @@ class IslandView(context: Context) : View(context) {
         return out
     }
 
-    private val ctlRects = arrayOf(RectF(), RectF(), RectF())
+    private val ctlRects = arrayOf(RectF(), RectF(), RectF(), RectF(), RectF())
     private val ctlTmp = RectF()
 
     /** Mengisi (dan mengembalikan) array tetap -> tanpa alokasi per frame. */
@@ -616,6 +617,9 @@ class IslandView(context: Context) : View(context) {
         ctlRects[0].set(c - dp(88) - half, cy - half, c - dp(88) + half, cy + half)
         ctlRects[1].set(c - half, cy - half, c + half, cy + half)
         ctlRects[2].set(c + dp(88) - half, cy - half, c + dp(88) + half, cy + half)
+        val hs = dp(22)
+        ctlRects[3].set(r.left + dp(4), cy - hs, r.left + dp(4) + 2 * hs, cy + hs)
+        ctlRects[4].set(r.right - dp(4) - 2 * hs, cy - hs, r.right - dp(4), cy + hs)
         return ctlRects
     }
 
@@ -660,6 +664,8 @@ class IslandView(context: Context) : View(context) {
                 if (cr[0].contains(x, y)) return Hit.PREV to b
                 if (cr[1].contains(x, y)) return Hit.PLAY to b
                 if (cr[2].contains(x, y)) return Hit.NEXT to b
+                if (cr[3].contains(x, y)) return Hit.STAR to b
+                if (cr[4].contains(x, y)) return Hit.OUTPUT to b
             } else if (hasActions(it)) {
                 for (k in it.actions.indices) {
                     if (actionRect(b, k, it.actions.size, tmpR).contains(x, y)) {
@@ -820,6 +826,16 @@ class IslandView(context: Context) : View(context) {
         } catch (_: Throwable) {}
     }
 
+    private fun openOutputSwitcher(pkg: String) {
+        val flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        try {
+            context.startActivity(Intent("com.android.settings.panel.action.MEDIA_OUTPUT")
+                .putExtra("com.android.settings.panel.extra.PACKAGE_NAME", pkg).addFlags(flags))
+        } catch (_: Throwable) {
+            try { context.startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(flags)) } catch (_: Throwable) {}
+        }
+    }
+
     private fun perform(h: Hit, b: Block?, idx: Int) {
         val item = b?.item
         try {
@@ -827,6 +843,12 @@ class IslandView(context: Context) : View(context) {
                 Hit.PILL -> onToggle?.invoke()
                 Hit.PREV -> item?.controller?.transportControls?.skipToPrevious()
                 Hit.NEXT -> item?.controller?.transportControls?.skipToNext()
+                // Bintang: aksi kustom pertama aplikasi musik (suka/favorit) bila ada.
+                Hit.STAR -> item?.controller?.let { mc ->
+                    mc.playbackState?.customActions?.firstOrNull()?.let { mc.transportControls.sendCustomAction(it, null) }
+                }
+                // Keluaran audio (speaker/Bluetooth) -> panel pemilih keluaran sistem.
+                Hit.OUTPUT -> openOutputSwitcher(item?.controller?.packageName.orEmpty())
                 Hit.PLAY -> item?.let {
                     if (it.playing) it.controller?.transportControls?.pause()
                     else it.controller?.transportControls?.play()
@@ -874,7 +896,7 @@ class IslandView(context: Context) : View(context) {
         c.scale(sx, sy, cx, pivotY)
         val alpha = (255 * v).toInt()
         val glassK = sa.value.coerceIn(0f, 1f)
-        bg.alpha = (alpha * (0.99f - 0.02f * glassK)).toInt()   // pil hampir hitam, kartu terbuka tembus pandang
+        bg.alpha = (alpha * (0.99f - 0.24f * glassK)).toInt()   // pil hampir hitam, kartu terbuka tembus pandang
 
         // pil utama
         rect.set(left, top, left + w, top + h)
@@ -882,7 +904,7 @@ class IslandView(context: Context) : View(context) {
         val r = min(sr.value, min(w, h) / 2f)
         c.drawRoundRect(rect, r, r, bg)
         if (glassK > 0.01f) {   // lapisan kaca terang saat kartu terbuka (gaya iOS 26)
-            tint.alpha = (alpha * 0.012f * glassK).toInt()
+            tint.alpha = (alpha * 0.05f * glassK).toInt()
             c.drawRoundRect(rect, r, r, tint)
         }
         drawGlass(c, left, top, w, h, r, alpha, glassK)
@@ -919,7 +941,7 @@ class IslandView(context: Context) : View(context) {
         glMat.setScale(1f, h * 0.62f)
         glMat.postTranslate(0f, top)
         glossShader.setLocalMatrix(glMat)
-        glossPaint.alpha = (alpha * 0.10f * (1f - k)).toInt()
+        glossPaint.alpha = (alpha * (0.10f + 0.28f * k)).toInt()
         rect.set(left, top, left + w, top + h)
         c.drawRoundRect(rect, r, r, glossPaint)
         val sw = max(dp(0.9f), 1f)
@@ -927,7 +949,7 @@ class IslandView(context: Context) : View(context) {
         glMat.postTranslate(left, top)
         rimShader.setLocalMatrix(glMat)
         rimPaint.strokeWidth = sw
-        rimPaint.alpha = (alpha * (0.40f - 0.28f * k)).toInt()
+        rimPaint.alpha = (alpha * (0.40f + 0.25f * k)).toInt()
         rect.set(left + sw / 2f, top + sw / 2f, left + w - sw / 2f, top + h - sw / 2f)
         c.drawRoundRect(rect, max(0f, r - sw / 2f), max(0f, r - sw / 2f), rimPaint)
         rect.set(left, top, left + w, top + h)
@@ -942,8 +964,9 @@ class IslandView(context: Context) : View(context) {
             drawNotice(c, p, left, w, midY, ia)
             return
         }
-        val s = artSize()
-        val ax = left + dp(4)
+        val circle = p.kind == Kind.MEDIA
+        val s = if (circle) h * 0.78f else artSize()
+        val ax = if (circle) left + (w - s) / 2f else left + dp(4)
         val ay = midY - s / 2f
         val sh = pArtShader
         if (p.art != null && sh != null) {
@@ -957,6 +980,7 @@ class IslandView(context: Context) : View(context) {
         } else {
             drawIcon(c, p.icon, ax, ay, s, ia)
         }
+        if (circle) return
         val rx = left + w - dp(9)
         when {
             p.hasTimer -> {
@@ -1317,6 +1341,44 @@ class IslandView(context: Context) : View(context) {
         drawSkip(c, cr[0].centerX(), cr[0].centerY(), false)
         if (i.playing) drawPause(c, cr[1].centerX(), cr[1].centerY()) else drawPlay(c, cr[1].centerX(), cr[1].centerY())
         drawSkip(c, cr[2].centerX(), cr[2].centerY(), true)
+        val has = i.controller?.playbackState?.customActions?.isNotEmpty() == true
+        fill.alpha = (ia * (if (has) 0.9f else 0.45f)).toInt()
+        drawStar(c, cr[3].centerX(), cr[3].centerY(), dp(11))
+        fill.alpha = (ia * 0.9f).toInt()
+        drawOutput(c, cr[4].centerX(), cr[4].centerY(), dp(12), ia)
+    }
+
+    private fun drawStar(c: Canvas, x: Float, y: Float, s: Float) {
+        path.reset()
+        for (k in 0 until 10) {
+            val rr = if (k % 2 == 0) s else s * 0.45f
+            val a = (-90 + k * 36) * (PI / 180.0)
+            val px = x + (cos(a) * rr).toFloat()
+            val py = y + (sin(a) * rr).toFloat()
+            if (k == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        path.close()
+        c.drawPath(path, fill)
+    }
+
+    /** Ikon keluaran audio (gaya AirPlay): dua busur + segitiga. */
+    private fun drawOutput(c: Canvas, x: Float, y: Float, s: Float, ia: Int) {
+        stroke.color = 0xFFFFFFFF.toInt()
+        stroke.alpha = (ia * 0.9f).toInt()
+        stroke.strokeWidth = dp(1.8f)
+        stroke.strokeCap = Paint.Cap.ROUND
+        for (k in 0..1) {
+            val rr = s * (0.55f + 0.45f * k)
+            rect.set(x - rr, y - s * 0.15f - rr, x + rr, y - s * 0.15f + rr)
+            c.drawArc(rect, 150f, 240f, false, stroke)
+        }
+        stroke.strokeCap = Paint.Cap.BUTT
+        path.reset()
+        path.moveTo(x - s * 0.5f, y + s * 0.85f)
+        path.lineTo(x + s * 0.5f, y + s * 0.85f)
+        path.lineTo(x, y + s * 0.15f)
+        path.close()
+        c.drawPath(path, fill)
     }
 
     private fun drawPlay(c: Canvas, x: Float, y: Float) {
