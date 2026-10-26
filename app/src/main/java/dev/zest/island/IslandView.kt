@@ -452,7 +452,7 @@ class IslandView(context: Context) : View(context) {
         (i.kind == Kind.TIMER || i.kind == Kind.CALL) && i.actions.isNotEmpty()
 
     private fun blockHeight(i: IslandItem): Float = when {
-        i.kind == Kind.MEDIA -> dp(132)
+        i.kind == Kind.MEDIA -> dp(164)
         i.kind == Kind.CALL && hasActions(i) -> dp(116)
         hasActions(i) -> dp(104)
         else -> dp(64)
@@ -543,8 +543,9 @@ class IslandView(context: Context) : View(context) {
             return
         }
         if (expanded) {
-            sw.to(expandedW, 0.36f, 0.74f)
-            sh.to(max(cardH, collapsedH), 0.38f, 0.70f)
+            // damping rendah = membal/kenyal seperti jeli (melebar ke bawah lalu mengendap)
+            sw.to(expandedW, 0.40f, 0.60f)
+            sh.to(max(cardH, collapsedH), 0.46f, 0.52f)
             sr.to(cornerExpanded, 0.35f, 0.9f)
             sa.to(1f, 0.30f, 1f)
         } else {
@@ -568,7 +569,7 @@ class IslandView(context: Context) : View(context) {
     /** Area bilah progress musik (diperlebar vertikal supaya mudah digeser). */
     private fun seekRect(b: Block, out: RectF): RectF {
         val r = blockRect(b, ctlTmp)
-        out.set(r.left, r.top + dp(62), r.right, r.top + dp(90))
+        out.set(r.left, r.top + dp(76), r.right, r.top + dp(108))
         return out
     }
 
@@ -609,7 +610,7 @@ class IslandView(context: Context) : View(context) {
     /** Mengisi (dan mengembalikan) array tetap -> tanpa alokasi per frame. */
     private fun controlRects(b: Block): Array<RectF> {
         val r = blockRect(b, ctlTmp)
-        val cy = r.top + dp(114)
+        val cy = r.top + dp(134)
         val c = r.centerX()
         val half = dp(26)
         ctlRects[0].set(c - dp(88) - half, cy - half, c - dp(88) + half, cy + half)
@@ -1293,7 +1294,7 @@ class IslandView(context: Context) : View(context) {
         }
         val px0 = x0 + dp(42)
         val px1 = x0 + blockW - dp(46)
-        val py = y0 + dp(76)
+        val py = y0 + dp(90)
         fill.color = 0xFFFFFFFF.toInt()
         fill.alpha = (ia * 0.16f).toInt()
         rect.set(px0, py, px1, py + dp(6))
