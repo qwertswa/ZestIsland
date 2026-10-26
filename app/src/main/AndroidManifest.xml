@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Diberikan otomatis bila APK ada di /system/priv-app + privapp-permissions -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"

@@ -1,6 +1,7 @@
 package dev.zest.island
 
 import android.content.Context
+import android.media.MediaMetadata
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.content.Intent
@@ -369,9 +370,9 @@ class IslandView(context: Context) : View(context) {
         syncBlocks()
         if (entering) {
             // Seperti "masuk ke island": titik kecil di kamera, lalu mengembang memantul jadi pil.
-            sw.snap(collapsedH)
-            sh.snap(collapsedH)
-            sr.snap(collapsedH / 2f)
+            sw.snap(idleD())
+            sh.snap(idleD())
+            sr.snap(idleD() / 2f)
             sa.snap(0f)
             vis.snap(1f)
             retarget()
@@ -523,9 +524,11 @@ class IslandView(context: Context) : View(context) {
         }
     }
 
+    private fun idleD() = collapsedH * 0.7f
+
     private fun collapsedTargetW(): Float {
         val p = primary
-        if (p == null) return collapsedH   // bulat kecil hanya saat idle
+        if (p == null) return idleD()   // bulat kecil hanya saat idle
         if (p == null || p.kind != Kind.NOTICE || p.title.isEmpty()) return collapsedW
         val gs = collapsedH * 0.56f
         val half = max(dp(11) + gs + dp(6), dp(12) + tNotice.measureText(p.title) + dp(6))
@@ -551,8 +554,9 @@ class IslandView(context: Context) : View(context) {
             sa.to(1f, 0.30f, 1f)
         } else {
             sw.to(collapsedTargetW(), 0.42f, 0.86f)
-            sh.to(collapsedH, 0.38f, 0.88f)
-            sr.to(collapsedH / 2f, 0.36f, 1f)
+            val hh = if (primary == null) idleD() else collapsedH
+            sh.to(hh, 0.38f, 0.88f)
+            sr.to(hh / 2f, 0.36f, 1f)
             sa.to(0f, 0.12f, 1f)
         }
         split.to(if (satItem != null && !expanded) 1f else 0f, 0.46f, 0.62f)
@@ -562,7 +566,7 @@ class IslandView(context: Context) : View(context) {
 
     // --------------------------------------------------------------- sentuh
 
-    private enum class Hit { NONE, PILL, PREV, PLAY, NEXT, STAR, OUTPUT, OPEN, ACTION, SEEK }
+    private enum class Hit { NONE, PILL, PREV, PLAY, NEXT, STAR, OUTPUT, MUTE, OPEN, ACTION, SEEK }
 
     private var seekBlock: Block? = null
     private var seekFrac = 0f
@@ -638,6 +642,23 @@ class IslandView(context: Context) : View(context) {
 
     private val hitTmp = RectF()
 
+    private val muteWords = arrayOf("mute", "bisu", "senyap", "unmute")
+    /** Panggilan tersambung tanpa tombol bisu dari aplikasinya -> tambahkan tombol bisu sendiri. */
+    private fun needsMute(i: IslandItem) =
+        i.kind == Kind.CALL && i.hasTimer && i.actions.none { a -> muteWords.any { a.title.lowercase().contains(it) } }
+
+    private fun micMuted(): Boolean = try {
+        (context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager).isMicrophoneMute
+    } catch (_: Throwable) { false }
+
+    private fun toggleMute() {
+        try {
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            am.isMicrophoneMute = !am.isMicrophoneMute
+        } catch (_: Throwable) {}
+        kick()
+    }
+
     private fun hit(rx: Float, ry: Float): Pair<Hit, Block?> {
         val x = rx - curOffX()
         val y = ry - offY
@@ -667,8 +688,11 @@ class IslandView(context: Context) : View(context) {
                 if (cr[3].contains(x, y)) return Hit.STAR to b
                 if (cr[4].contains(x, y)) return Hit.OUTPUT to b
             } else if (hasActions(it)) {
+                val off = if (needsMute(it)) 1 else 0
+                val n = it.actions.size + off
+                if (off == 1 && actionRect(b, 0, n, tmpR).contains(x, y)) return Hit.MUTE to b
                 for (k in it.actions.indices) {
-                    if (actionRect(b, k, it.actions.size, tmpR).contains(x, y)) {
+                    if (actionRect(b, k + off, n, tmpR).contains(x, y)) {
                         hitIdx = k
                         return Hit.ACTION to b
                     }
@@ -826,6 +850,32 @@ class IslandView(context: Context) : View(context) {
         } catch (_: Throwable) {}
     }
 
+    private val likedOverride = HashMap<String, Boolean>()
+    private val likedWords = arrayOf("remove", "unlike", "unfav", "liked", "saved", "hapus", "batal", "dihapus", "tersimpan")
+
+    private fun supportsLike(i: IslandItem): Boolean = i.controller?.let {
+        likeAction(it) != null || it.metadata?.getRating(MediaMetadata.METADATA_KEY_USER_RATING) != null
+    } == true
+
+    private fun isLiked(i: IslandItem): Boolean {
+        likedOverride[i.key + "|" + i.title]?.let { return it }
+        val mc = i.controller ?: return false
+        val r = mc.metadata?.getRating(MediaMetadata.METADATA_KEY_USER_RATING)
+        if (r != null && r.isRated && r.ratingStyle == android.media.Rating.RATING_HEART) return r.hasHeart()
+        val a = likeAction(mc) ?: return false
+        val s = (a.action + " " + a.name).lowercase()
+        return likedWords.any { s.contains(it) }
+    }
+
+    private val likeWords = arrayOf("like", "love", "favorit", "favourite", "favorite", "heart", "thumb", "suka", "save", "add_to")
+
+    /** Aksi kustom aplikasi musik untuk suka/favorit (mis. Spotify, YT Music). */
+    private fun likeAction(mc: android.media.session.MediaController): android.media.session.PlaybackState.CustomAction? =
+        mc.playbackState?.customActions?.firstOrNull { a ->
+            val s = (a.action + " " + a.name).lowercase()
+            likeWords.any { s.contains(it) }
+        }
+
     private fun openOutputSwitcher(pkg: String) {
         val flags = Intent.FLAG_ACTIVITY_NEW_TASK
         try {
@@ -844,9 +894,15 @@ class IslandView(context: Context) : View(context) {
                 Hit.PREV -> item?.controller?.transportControls?.skipToPrevious()
                 Hit.NEXT -> item?.controller?.transportControls?.skipToNext()
                 // Bintang: aksi kustom pertama aplikasi musik (suka/favorit) bila ada.
-                Hit.STAR -> item?.controller?.let { mc ->
-                    mc.playbackState?.customActions?.firstOrNull()?.let { mc.transportControls.sendCustomAction(it, null) }
-                }
+                Hit.MUTE -> toggleMute()
+                Hit.STAR -> item?.let { item -> item.controller?.let { mc ->
+                    val now = isLiked(item)
+                    val ca = likeAction(mc)
+                    if (ca != null) mc.transportControls.sendCustomAction(ca, null)
+                    else try { mc.transportControls.setRating(android.media.Rating.newHeartRating(!now)) } catch (_: Throwable) {}
+                    likedOverride[item.key + "|" + (item.title)] = !now
+                    kick()
+                } }
                 // Keluaran audio (speaker/Bluetooth) -> panel pemilih keluaran sistem.
                 Hit.OUTPUT -> openOutputSwitcher(item?.controller?.packageName.orEmpty())
                 Hit.PLAY -> item?.let {
@@ -889,14 +945,14 @@ class IslandView(context: Context) : View(context) {
         val sx = (1f + pulse) * appear * press.value
         val sy = (1f - pulse * 0.6f) * appear * press.value
         val left = cx - w / 2f
-        val top = 0f
+        val top = if (h < collapsedH && !expanded) (collapsedH - h) / 2f else 0f
         val pivotY = min(h / 2f, collapsedH / 2f)
 
         c.save()
         c.scale(sx, sy, cx, pivotY)
         val alpha = (255 * v).toInt()
         val glassK = sa.value.coerceIn(0f, 1f)
-        bg.alpha = (alpha * (0.99f - 0.24f * glassK)).toInt()   // pil hampir hitam, kartu terbuka tembus pandang
+        bg.alpha = (alpha * (0.99f - 0.13f * glassK)).toInt()   // pil hampir hitam, kartu terbuka tembus pandang
 
         // pil utama
         rect.set(left, top, left + w, top + h)
@@ -1219,9 +1275,18 @@ class IslandView(context: Context) : View(context) {
         }
         // tombol aksi (Berhenti / Jeda / Tolak / Akhiri ...)
         if (hasActions(i)) {
-            val n = i.actions.size
-            for (k in 0 until n) {
-                actionRect(b, k, n, btnRect)
+            val off = if (needsMute(i)) 1 else 0
+            val n = i.actions.size + off
+            if (off == 1) {
+                actionRect(b, 0, n, btnRect)
+                val muted = micMuted()
+                fill.color = if (muted) 0xFFFFFFFF.toInt() else 0xFF3A3A40.toInt()
+                fill.alpha = ia
+                c.drawRoundRect(btnRect, btnRect.height() / 2f, btnRect.height() / 2f, fill)
+                drawMic(c, btnRect.centerX(), btnRect.centerY(), btnRect.height() * 0.46f, muted, ia)
+            }
+            for (k in 0 until i.actions.size) {
+                actionRect(b, k + off, n, btnRect)
                 val t = i.actions[k].title
                 val danger = isDanger(t)
                 if (i.kind == Kind.CALL) {
@@ -1252,6 +1317,21 @@ class IslandView(context: Context) : View(context) {
                 c.drawText(label, btnRect.centerX(), btnRect.centerY() - (fm.ascent + fm.descent) / 2f, tBtn)
             }
         }
+    }
+
+    private fun drawMic(c: Canvas, cx: Float, cy: Float, s: Float, muted: Boolean, ia: Int) {
+        val col = if (muted) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+        fill.color = col; fill.alpha = ia
+        stroke.color = col; stroke.alpha = ia
+        stroke.strokeWidth = max(dp(1.5f), s * 0.11f)
+        stroke.strokeCap = Paint.Cap.ROUND
+        rect.set(cx - s * 0.22f, cy - s * 0.55f, cx + s * 0.22f, cy + s * 0.12f)
+        c.drawRoundRect(rect, s * 0.22f, s * 0.22f, fill)
+        rect.set(cx - s * 0.42f, cy - s * 0.3f, cx + s * 0.42f, cy + s * 0.34f)
+        c.drawArc(rect, 0f, 180f, false, stroke)
+        c.drawLine(cx, cy + s * 0.34f, cx, cy + s * 0.55f, stroke)
+        if (muted) c.drawLine(cx - s * 0.5f, cy - s * 0.5f, cx + s * 0.5f, cy + s * 0.55f, stroke)
+        stroke.strokeCap = Paint.Cap.BUTT
     }
 
     /** Gagang telepon: busur tebal; ditelungkupkan (diputar) untuk tombol tutup. */
@@ -1341,9 +1421,12 @@ class IslandView(context: Context) : View(context) {
         drawSkip(c, cr[0].centerX(), cr[0].centerY(), false)
         if (i.playing) drawPause(c, cr[1].centerX(), cr[1].centerY()) else drawPlay(c, cr[1].centerX(), cr[1].centerY())
         drawSkip(c, cr[2].centerX(), cr[2].centerY(), true)
-        val has = i.controller?.playbackState?.customActions?.isNotEmpty() == true
-        fill.alpha = (ia * (if (has) 0.9f else 0.45f)).toInt()
+        val has = supportsLike(i)
+        val liked = has && isLiked(i)
+        fill.color = if (liked) 0xFFFFD60A.toInt() else 0xFFFFFFFF.toInt()   // kuning bila disukai
+        fill.alpha = (ia * (if (liked) 1f else if (has) 0.92f else 0.16f)).toInt()   // tidak didukung = sangat redup
         drawStar(c, cr[3].centerX(), cr[3].centerY(), dp(11))
+        fill.color = 0xFFFFFFFF.toInt()
         fill.alpha = (ia * 0.9f).toInt()
         drawOutput(c, cr[4].centerX(), cr[4].centerY(), dp(12), ia)
     }
