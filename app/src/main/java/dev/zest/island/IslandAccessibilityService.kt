@@ -118,8 +118,8 @@ class IslandAccessibilityService : AccessibilityService() {
 
     /** Paket aplikasi biasa yang sedang tampil di depan ("" bila launcher/sistem/tidak diketahui). */
     private fun foregroundPkg(): String = try {
-        val w = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-            .firstOrNull { it.isActive || it.isFocused }
+        // daftar jendela terurut dari paling atas -> jendela aplikasi teratas = aplikasi di depan
+        val w = windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
         val p = w?.root?.packageName?.toString().orEmpty()
         if (p == "com.android.systemui" || p == packageName) "" else p
     } catch (_: Throwable) { "" }

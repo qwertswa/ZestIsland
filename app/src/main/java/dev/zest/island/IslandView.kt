@@ -362,10 +362,23 @@ class IslandView(context: Context) : View(context) {
     fun resetHidden() { hidden = false }
 
     fun bind(newItems: List<IslandItem>, isExpanded: Boolean) {
+        val entering = items.isEmpty() && newItems.isNotEmpty() && !isExpanded && !hidden && vis.value < 0.3f
         items = newItems
         expanded = isExpanded
         pickPrimary()
         syncBlocks()
+        if (entering) {
+            // Seperti "masuk ke island": titik kecil di kamera, lalu mengembang memantul jadi pil.
+            sw.snap(collapsedH * 0.8f)
+            sh.snap(collapsedH * 0.8f)
+            sr.snap(collapsedH * 0.4f)
+            sa.snap(0f)
+            vis.snap(0.5f)
+            retarget()
+            sw.to(collapsedTargetW(), 0.46f, 0.56f)
+            sh.to(collapsedH, 0.40f, 0.58f)
+            return
+        }
         retarget()
     }
 
@@ -404,9 +417,9 @@ class IslandView(context: Context) : View(context) {
         }
         val media = list.firstOrNull { it.kind == Kind.MEDIA }
         val timerLike = list.firstOrNull { it.kind == Kind.TIMER || it.kind == Kind.CALL }
-        if (notice == null && first.kind != Kind.ALERT && media != null && timerLike != null) {
+        if (false && notice == null && first.kind != Kind.ALERT && media != null && timerLike != null) {
             primary = media
-            satItem = timerLike
+            satItem = null
         } else {
             primary = first
             satItem = null
@@ -561,8 +574,8 @@ class IslandView(context: Context) : View(context) {
 
     private fun fracAt(b: Block, x: Float): Float {
         val r = blockRect(b, ctlTmp)
-        val p0 = r.left + dp(2)
-        val p1 = r.right - dp(2)
+        val p0 = r.left + dp(42)
+        val p1 = r.right - dp(46)
         return ((x - curOffX() - p0) / (p1 - p0)).coerceIn(0f, 1f)
     }
 
@@ -860,7 +873,7 @@ class IslandView(context: Context) : View(context) {
         c.scale(sx, sy, cx, pivotY)
         val alpha = (255 * v).toInt()
         val glassK = sa.value.coerceIn(0f, 1f)
-        bg.alpha = (alpha * (0.99f - 0.14f * glassK)).toInt()   // pil hampir hitam, kartu terbuka tembus pandang
+        bg.alpha = (alpha * (0.99f - 0.02f * glassK)).toInt()   // pil hampir hitam, kartu terbuka tembus pandang
 
         // pil utama
         rect.set(left, top, left + w, top + h)
@@ -868,7 +881,7 @@ class IslandView(context: Context) : View(context) {
         val r = min(sr.value, min(w, h) / 2f)
         c.drawRoundRect(rect, r, r, bg)
         if (glassK > 0.01f) {   // lapisan kaca terang saat kartu terbuka (gaya iOS 26)
-            tint.alpha = (alpha * 0.07f * glassK).toInt()
+            tint.alpha = (alpha * 0.012f * glassK).toInt()
             c.drawRoundRect(rect, r, r, tint)
         }
         drawGlass(c, left, top, w, h, r, alpha, glassK)
@@ -905,7 +918,7 @@ class IslandView(context: Context) : View(context) {
         glMat.setScale(1f, h * 0.62f)
         glMat.postTranslate(0f, top)
         glossShader.setLocalMatrix(glMat)
-        glossPaint.alpha = (alpha * (0.35f + 0.65f * k)).toInt()
+        glossPaint.alpha = (alpha * (0.25f + 0.25f * k)).toInt()
         rect.set(left, top, left + w, top + h)
         c.drawRoundRect(rect, r, r, glossPaint)
         val sw = max(dp(0.9f), 1f)
@@ -1240,7 +1253,7 @@ class IslandView(context: Context) : View(context) {
 
     private fun drawMedia(c: Canvas, b: Block, x0: Float, y0: Float, ia: Int) {
         val i = b.item
-        val artS = dp(58)
+        val artS = dp(60)
         val ax = x0 + dp(2)
         val ay = y0 + dp(2)
         val sh = b.shader
@@ -1276,8 +1289,8 @@ class IslandView(context: Context) : View(context) {
             frac = seekFrac
             pos = (seekFrac * i.durationMs).toLong()
         }
-        val px0 = x0 + dp(2)
-        val px1 = x0 + blockW - dp(2)
+        val px0 = x0 + dp(42)
+        val px1 = x0 + blockW - dp(46)
         val py = y0 + dp(76)
         fill.color = 0xFFFFFFFF.toInt()
         fill.alpha = (ia * 0.28f).toInt()
@@ -1287,10 +1300,11 @@ class IslandView(context: Context) : View(context) {
         rect.set(px0, py, px0 + (px1 - px0) * frac.coerceIn(0f, 1f), py + dp(4))
         c.drawRoundRect(rect, dp(2), dp(2), fill)
         tSmall.alpha = ia
-        c.drawText(formatMs(pos), px0, y0 + dp(98), tSmall)
-        val dur = if (i.durationMs > 0) formatMs(i.durationMs) else "--:--"
+        val ty = py + dp(2) - (tSmall.fontMetrics.ascent + tSmall.fontMetrics.descent) / 2f
+        c.drawText(formatMs(pos), x0 + dp(2), ty, tSmall)
+        val dur = if (i.durationMs > 0) "-" + formatMs((i.durationMs - pos).coerceAtLeast(0L)) else "--:--"
         tSmall.textAlign = Paint.Align.RIGHT
-        c.drawText(dur, px1, y0 + dp(98), tSmall)
+        c.drawText(dur, x0 + blockW - dp(2), ty, tSmall)
         tSmall.textAlign = Paint.Align.LEFT
 
         // kontrol
@@ -1303,7 +1317,7 @@ class IslandView(context: Context) : View(context) {
     }
 
     private fun drawPlay(c: Canvas, x: Float, y: Float) {
-        val s = dp(13)
+        val s = dp(15)
         path.reset()
         path.moveTo(x - s * 0.7f, y - s)
         path.lineTo(x + s * 0.95f, y)
@@ -1313,8 +1327,8 @@ class IslandView(context: Context) : View(context) {
     }
 
     private fun drawPause(c: Canvas, x: Float, y: Float) {
-        val s = dp(12)
-        val w = dp(5)
+        val s = dp(14)
+        val w = dp(6)
         rect.set(x - s * 0.8f, y - s, x - s * 0.8f + w, y + s)
         c.drawRoundRect(rect, dp(1.5f), dp(1.5f), fill)
         rect.set(x + s * 0.8f - w, y - s, x + s * 0.8f, y + s)
