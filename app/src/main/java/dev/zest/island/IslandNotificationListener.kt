@@ -114,13 +114,24 @@ class IslandNotificationListener : NotificationListenerService() {
         val ex = n.extras
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
         val text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        if (isBlocked(sbn.packageName)) return   // daftar blokir buatan pengguna
+        Dbg.d {
+            "extras ${sbn.packageName}: " + try {
+                ex.keySet().filter { it.startsWith("android.ongoing") || it.startsWith("android.request") || it.contains("sub") || it.contains("big") }
+                    .joinToString { k -> k + "=" + (ex.get(k)?.toString()?.take(60)) }
+            } catch (_: Throwable) { "?" }
+        }
         val app = appLabel(sbn.packageName)
         val icon = try { n.smallIcon?.loadDrawable(this) } catch (_: Throwable) { null }
         var chrono = ex.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER, false)
         var chronoWhen = n.`when`
         var chronoDown = ex.getBoolean("android.chronometerCountDown", false)
         var frozenFromView = -1L
-        val isCall = n.category == Notification.CATEGORY_CALL
+        // Panggilan: kategori call, atau CallStyle (Android 12+), atau notifikasi dari aplikasi telepon.
+        val tmpl = try { ex.getString(Notification.EXTRA_TEMPLATE).orEmpty() } catch (_: Throwable) { "" }
+        val isCall = n.category == Notification.CATEGORY_CALL ||
+            tmpl.endsWith("CallStyle") || ex.containsKey("android.callType") ||
+            (isPhoneApp(sbn.packageName) && (n.fullScreenIntent != null || (n.flags and Notification.FLAG_ONGOING_EVENT) != 0))
         val ongoing = (n.flags and (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE)) != 0
         // Stopwatch/timer Samsung Jam sering memakai tampilan kustom tanpa chronometer standar.
         val isClock = ongoing && (
@@ -152,14 +163,25 @@ class IslandNotificationListener : NotificationListenerService() {
             ex.containsKey("android.ongoingActivityNoti.style") || ex.getBoolean("android.requestPromotedOngoing", false)
         } catch (_: Throwable) { false }
         val primaryInfo = if (ongoingAct) cs(ex, "android.ongoingActivityNoti.primaryInfo") else ""
-        val secondaryInfo = if (ongoingAct) cs(ex, "android.ongoingActivityNoti.secondaryInfo") else ""
+        // Teks kedua: secondaryInfo; bila kosong / teks mentah "ambientData:..." cari kandidat lain di extras.
+        val secondaryInfo = if (!ongoingAct) "" else {
+            val cands = ArrayList<String>()
+            cands.add(cs(ex, "android.ongoingActivityNoti.secondaryInfo"))
+            try {
+                for (k in ex.keySet()) if (k.startsWith("android.ongoingActivityNoti.") && !k.endsWith("primaryInfo")) cands.add(cs(ex, k))
+            } catch (_: Throwable) {}
+            cands.add(cs(ex, Notification.EXTRA_SUB_TEXT))
+            cands.add(cs(ex, Notification.EXTRA_BIG_TEXT))
+            cands.add(text)
+            cands.firstOrNull { it.isNotEmpty() && !it.startsWith("ambientData:") && it.length < 120 } ?: ""
+        }
         when {
             chrono || isCall || isClock || ongoingAct -> {
                 val item = IslandItem(
                     sbn.key,
                     if (isCall) Kind.CALL else Kind.TIMER,
                     primaryInfo.ifEmpty { title.ifEmpty { app } },
-                    secondaryInfo.ifEmpty { text.ifEmpty { app } }
+                    secondaryInfo.ifEmpty { text.takeUnless { it.startsWith("ambientData:") }.orEmpty().ifEmpty { app } }
                 )
                 item.icon = icon
                 item.tap = n.contentIntent
@@ -258,6 +280,17 @@ class IslandNotificationListener : NotificationListenerService() {
     } catch (_: Throwable) { "" }
 
     /** Opsional: settings put system zest_island_all_notifs 1 -> semua notifikasi tampil di island. */
+    private val phonePkgs = arrayOf("com.samsung.android.incallui", "com.android.incallui", "com.google.android.dialer",
+        "com.samsung.android.dialer", "com.android.server.telecom", "com.android.phone")
+    private fun isPhoneApp(p: String) = p in phonePkgs
+
+    // Bawaan: aplikasi yang bukan sumber Ongoing Activity. Tambahan lewat: settings put system zest_island_block "pkg1,pkg2"
+    private val blockedPkgs = hashSetOf<String>()
+    private fun isBlocked(p: String): Boolean {
+        val extra = try { android.provider.Settings.System.getString(contentResolver, "zest_island_block").orEmpty() } catch (_: Throwable) { "" }
+        return (p in blockedPkgs && !isPhoneApp(p)) || (extra.isNotEmpty() && extra.split(',').any { it.trim() == p })
+    }
+
     private fun allNotifs(): Boolean = try {
         android.provider.Settings.System.getInt(contentResolver, "zest_island_all_notifs", 0) == 1
     } catch (_: Throwable) { false }

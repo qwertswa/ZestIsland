@@ -46,7 +46,7 @@ class IslandAccessibilityService : AccessibilityService() {
 
     private var offX = 0
     private var offY = 0
-    private val prefKeys = listOf("zest_island_width", "zest_island_height", "zest_island_x", "zest_island_y", "zest_island_debug")
+    private val prefKeys = listOf("zest_island_width", "zest_island_height", "zest_island_x", "zest_island_y", "zest_island_debug", "zest_island_enabled")
     private val prefObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean, uri: Uri?) { loadPrefs() }
     }
@@ -58,8 +58,12 @@ class IslandAccessibilityService : AccessibilityService() {
     } catch (_: Throwable) { resources.displayMetrics.widthPixels }
 
     /** Baca ukuran/posisi pill dari UN1CA Settings (dp), lalu terapkan. */
+    private var islandOn = true
+
     private fun loadPrefs() {
         Dbg.on = geti("zest_island_debug") == 1
+        val on = try { Settings.System.getInt(contentResolver, "zest_island_enabled", 1) != 0 } catch (_: Throwable) { true }
+        if (on != islandOn) { islandOn = on; handler.post { refresh() } }
         val d = resources.displayMetrics.density
         view.setPillSize(geti("zest_island_width"), geti("zest_island_height"))
         offX = (geti("zest_island_x").coerceIn(-400, 400) * d).toInt()
@@ -226,6 +230,13 @@ class IslandAccessibilityService : AccessibilityService() {
     }
 
     private fun refresh() {
+        if (!islandOn) {   // dimatikan dari Settings -> lepas jendela, tidak ada yang digambar
+            expanded = false
+            stopTicker()
+            handler.removeCallbacks(hideRun)
+            detach()
+            return
+        }
         val locked = try { km.isKeyguardLocked } catch (_: Throwable) { false }
         // Baru saja dibuka kuncinya -> ikon gembok terbuka (sekali, dedupe di SystemNotices).
         if (lastLocked && !locked) SystemNotices.unlock()
