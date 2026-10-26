@@ -119,7 +119,7 @@ class IslandView(context: Context) : View(context) {
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, v, resources.displayMetrics)
 
     // Cutout A23: sekitar 61x23dp di tengah atas.
-    private var collapsedW = dp(100)
+    private var collapsedW = dp(112)
     private var collapsedH = dp(28)
     private var satD = collapsedH
     private val satGap = dp(4)
@@ -128,7 +128,7 @@ class IslandView(context: Context) : View(context) {
     private val pad = dp(12)
     private val blockGap = dp(8)
     private val blockW get() = expandedW - 2 * pad
-    private val cornerExpanded = dp(30)
+    private val cornerExpanded = dp(40)
 
     // Pegas (gaya referensi)
     private val sw = Spr(collapsedW * 0.6f, 0.36f, 0.74f, 0.4f)
@@ -333,7 +333,7 @@ class IslandView(context: Context) : View(context) {
 
     /** Ukuran pill (dp) dari UN1CA Settings; 0 = bawaan. */
     fun setPillSize(wDp: Int, hDp: Int) {
-        val w = if (wDp <= 0) 100 else wDp.coerceIn(40, 300)
+        val w = if (wDp <= 0) 112 else wDp.coerceIn(40, 300)
         val h = if (hDp <= 0) 28 else hDp.coerceIn(16, 80)
         val nw = dp(w)
         val nh = dp(h)
@@ -436,7 +436,7 @@ class IslandView(context: Context) : View(context) {
         }
     }
 
-    private fun artSize() = min(collapsedH * 0.7f, dp(22))
+    private fun artSize() = min(collapsedH * 0.8f, dp(24))
 
     private fun makeShader(bmp: Bitmap, size: Float): BitmapShader {
         val sh = BitmapShader(bmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
@@ -548,10 +548,10 @@ class IslandView(context: Context) : View(context) {
             sr.to(cornerExpanded, 0.35f, 0.9f)
             sa.to(1f, 0.30f, 1f)
         } else {
-            sw.to(collapsedTargetW(), 0.34f, 0.92f)
-            sh.to(collapsedH, 0.32f, 0.94f)
-            sr.to(collapsedH / 2f, 0.30f, 1f)
-            sa.to(0f, 0.14f, 1f)
+            sw.to(collapsedTargetW(), 0.42f, 0.86f)
+            sh.to(collapsedH, 0.38f, 0.88f)
+            sr.to(collapsedH / 2f, 0.36f, 1f)
+            sa.to(0f, 0.12f, 1f)
         }
         split.to(if (satItem != null && !expanded) 1f else 0f, 0.46f, 0.62f)
         vis.to(if (items.isEmpty()) 0f else 1f, 0.22f, 1f)
@@ -918,7 +918,7 @@ class IslandView(context: Context) : View(context) {
         glMat.setScale(1f, h * 0.62f)
         glMat.postTranslate(0f, top)
         glossShader.setLocalMatrix(glMat)
-        glossPaint.alpha = (alpha * (0.25f + 0.25f * k)).toInt()
+        glossPaint.alpha = (alpha * 0.10f * (1f - k)).toInt()
         rect.set(left, top, left + w, top + h)
         c.drawRoundRect(rect, r, r, glossPaint)
         val sw = max(dp(0.9f), 1f)
@@ -926,7 +926,7 @@ class IslandView(context: Context) : View(context) {
         glMat.postTranslate(left, top)
         rimShader.setLocalMatrix(glMat)
         rimPaint.strokeWidth = sw
-        rimPaint.alpha = (alpha * (0.45f + 0.55f * k)).toInt()
+        rimPaint.alpha = (alpha * (0.40f - 0.28f * k)).toInt()
         rect.set(left + sw / 2f, top + sw / 2f, left + w - sw / 2f, top + h - sw / 2f)
         c.drawRoundRect(rect, max(0f, r - sw / 2f), max(0f, r - sw / 2f), rimPaint)
         rect.set(left, top, left + w, top + h)
@@ -942,7 +942,7 @@ class IslandView(context: Context) : View(context) {
             return
         }
         val s = artSize()
-        val ax = left + dp(9)
+        val ax = left + dp(4)
         val ay = midY - s / 2f
         val sh = pArtShader
         if (p.art != null && sh != null) {
@@ -956,14 +956,14 @@ class IslandView(context: Context) : View(context) {
         } else {
             drawIcon(c, p.icon, ax, ay, s, ia)
         }
-        val rx = left + w - dp(10)
+        val rx = left + w - dp(9)
         when {
             p.hasTimer -> {
                 tPill.alpha = ia
                 val fm = tPill.fontMetrics
                 c.drawText(formatTimer(p, true), rx, midY - (fm.ascent + fm.descent) / 2f, tPill)
             }
-            p.kind == Kind.MEDIA -> drawEq(c, rx - dp(14), midY, min(h * 0.45f, dp(12)), ia, p.playing)
+            p.kind == Kind.MEDIA -> drawEq(c, rx - dp(20.5f), midY, min(h * 0.5f, dp(13)), ia, p.playing)
         }
     }
 
@@ -1088,8 +1088,10 @@ class IslandView(context: Context) : View(context) {
         fill.alpha = ia
         val bw = dp(2.5f)
         val gap = dp(2f)
-        for (i in 0 until 4) {
-            val k = if (playing) 0.3f + 0.7f * abs(sin(t * 5.2f + i * 1.7f) * cos(t * 2.3f + i)) else 0.22f
+        for (i in 0 until 5) {
+            // naik-turun seperti equalizer: tiap batang punya kecepatan & fase sendiri
+            val k = if (playing) 0.18f + 0.82f * (0.5f + 0.5f * sin(t * (7.5f + i * 1.9f) + i * 2.3f)) *
+                (0.65f + 0.35f * sin(t * 2.6f + i * 0.9f)) else 0.2f
             val bh = max(dp(2f), maxH * k)
             val bx = x + i * (bw + gap)
             rect.set(bx, midY - bh / 2f, bx + bw, midY + bh / 2f)
@@ -1293,14 +1295,14 @@ class IslandView(context: Context) : View(context) {
         val px1 = x0 + blockW - dp(46)
         val py = y0 + dp(76)
         fill.color = 0xFFFFFFFF.toInt()
-        fill.alpha = (ia * 0.28f).toInt()
-        rect.set(px0, py, px1, py + dp(4))
-        c.drawRoundRect(rect, dp(2), dp(2), fill)
+        fill.alpha = (ia * 0.16f).toInt()
+        rect.set(px0, py, px1, py + dp(6))
+        c.drawRoundRect(rect, dp(3), dp(3), fill)
         fill.alpha = ia
-        rect.set(px0, py, px0 + (px1 - px0) * frac.coerceIn(0f, 1f), py + dp(4))
-        c.drawRoundRect(rect, dp(2), dp(2), fill)
+        rect.set(px0, py, px0 + max(dp(6), (px1 - px0) * frac.coerceIn(0f, 1f)), py + dp(6))
+        c.drawRoundRect(rect, dp(3), dp(3), fill)
         tSmall.alpha = ia
-        val ty = py + dp(2) - (tSmall.fontMetrics.ascent + tSmall.fontMetrics.descent) / 2f
+        val ty = py + dp(3) - (tSmall.fontMetrics.ascent + tSmall.fontMetrics.descent) / 2f
         c.drawText(formatMs(pos), x0 + dp(2), ty, tSmall)
         val dur = if (i.durationMs > 0) "-" + formatMs((i.durationMs - pos).coerceAtLeast(0L)) else "--:--"
         tSmall.textAlign = Paint.Align.RIGHT
@@ -1338,15 +1340,15 @@ class IslandView(context: Context) : View(context) {
     private fun drawSkip(c: Canvas, x: Float, y: Float, next: Boolean) {
         val s = dp(10)
         val d = if (next) 1f else -1f
-        path.reset()
-        path.moveTo(x - d * s, y - s)
-        path.lineTo(x + d * s * 0.6f, y)
-        path.lineTo(x - d * s, y + s)
-        path.close()
-        c.drawPath(path, fill)
-        val bx = x + d * s * 0.85f
-        rect.set(bx - dp(1.6f), y - s, bx + dp(1.6f), y + s)
-        c.drawRoundRect(rect, dp(1f), dp(1f), fill)
+        for (k in 0..1) {   // dua segitiga seperti iPhone (rewind / fast-forward)
+            val ox = x + d * (k - 0.5f) * s * 1.35f
+            path.reset()
+            path.moveTo(ox - d * s * 0.7f, y - s)
+            path.lineTo(ox + d * s * 0.7f, y)
+            path.lineTo(ox - d * s * 0.7f, y + s)
+            path.close()
+            c.drawPath(path, fill)
+        }
     }
 
     // ----------------------------------------------------------------- teks
@@ -1357,7 +1359,7 @@ class IslandView(context: Context) : View(context) {
         val sec = ms / 1000
         return msCache.getOrPut(sec) {
             if (msCache.size > 600) msCache.clear()
-            String.format("%02d:%02d", sec / 60, sec % 60)
+            String.format("%d:%02d", sec / 60, sec % 60)
         }
     }
 
