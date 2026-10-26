@@ -11,8 +11,8 @@ android {
         applicationId = "dev.zest.island"
         minSdk = 31
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 130
+        versionName = "1.3.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

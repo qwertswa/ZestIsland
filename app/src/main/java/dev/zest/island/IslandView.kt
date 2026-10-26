@@ -618,9 +618,9 @@ class IslandView(context: Context) : View(context) {
         val cy = r.top + dp(134)
         val c = r.centerX()
         val half = dp(26)
-        ctlRects[0].set(c - dp(88) - half, cy - half, c - dp(88) + half, cy + half)
+        ctlRects[0].set(c - dp(64) - half, cy - half, c - dp(64) + half, cy + half)
         ctlRects[1].set(c - half, cy - half, c + half, cy + half)
-        ctlRects[2].set(c + dp(88) - half, cy - half, c + dp(88) + half, cy + half)
+        ctlRects[2].set(c + dp(64) - half, cy - half, c + dp(64) + half, cy + half)
         val hs = dp(22)
         ctlRects[3].set(r.left + dp(4), cy - hs, r.left + dp(4) + 2 * hs, cy + hs)
         ctlRects[4].set(r.right - dp(4) - 2 * hs, cy - hs, r.right - dp(4), cy + hs)
@@ -851,7 +851,8 @@ class IslandView(context: Context) : View(context) {
     }
 
     private val likedOverride = HashMap<String, Boolean>()
-    private val likedWords = arrayOf("remove", "unlike", "unfav", "liked", "saved", "hapus", "batal", "dihapus", "tersimpan")
+    // Nama aksi "hapus/batalkan suka" = lagu SUDAH disukai; "tambah/suka" = BELUM disukai.
+    private val likedWords = arrayOf("remove", "unlike", "unfav", "unsave", "hapus", "batal", "dislike", "delete")
 
     private fun supportsLike(i: IslandItem): Boolean = i.controller?.let {
         likeAction(it) != null || it.metadata?.getRating(MediaMetadata.METADATA_KEY_USER_RATING) != null
@@ -1423,8 +1424,8 @@ class IslandView(context: Context) : View(context) {
         drawSkip(c, cr[2].centerX(), cr[2].centerY(), true)
         val has = supportsLike(i)
         val liked = has && isLiked(i)
-        fill.color = if (liked) 0xFFFFD60A.toInt() else 0xFFFFFFFF.toInt()   // kuning bila disukai
-        fill.alpha = (ia * (if (liked) 1f else if (has) 0.92f else 0.16f)).toInt()   // tidak didukung = sangat redup
+        fill.color = if (liked) 0xFFFFD60A.toInt() else 0xFF8E8E93.toInt()   // kuning = disukai, abu = belum
+        fill.alpha = (ia * (if (liked) 1f else if (has) 0.95f else 0.16f)).toInt()   // tidak didukung = sangat redup
         drawStar(c, cr[3].centerX(), cr[3].centerY(), dp(11))
         fill.color = 0xFFFFFFFF.toInt()
         fill.alpha = (ia * 0.9f).toInt()
