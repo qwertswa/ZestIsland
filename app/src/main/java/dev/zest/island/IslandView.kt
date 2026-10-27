@@ -1027,7 +1027,12 @@ class IslandView(context: Context) : View(context) {
         val ax = if (circle) left + (w - s) / 2f else left + dp(4)
         val ay = midY - s / 2f
         val sh = pArtShader
-        if (p.art != null && sh != null) {
+        if (p.rec) {   // titik merah berdenyut = sedang merekam
+            val pulse = 0.65f + 0.35f * sin(SystemClock.uptimeMillis() / 1000f * 5f)
+            fill.color = 0xFFFF3B30.toInt()
+            fill.alpha = (ia * pulse).toInt()
+            c.drawCircle(ax + s / 2f, midY, s * 0.34f, fill)
+        } else if (p.art != null && sh != null) {
             shaderPaint.shader = sh
             shaderPaint.alpha = ia
             c.save()

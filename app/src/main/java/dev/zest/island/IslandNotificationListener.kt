@@ -19,6 +19,7 @@ class IslandNotificationListener : NotificationListenerService() {
     companion object {
         /** true bila berjalan di dalam proses SystemUI (mode tertanam). */
         @Volatile var inSystemUi = false
+        @Volatile var connected = false
         private const val OWN_PACKAGE = "dev.zest.island"
         private const val PAUSED_HIDE_MS = 60_000L
     }
@@ -83,7 +84,10 @@ class IslandNotificationListener : NotificationListenerService() {
     private val idleRemovers = HashMap<String, Runnable>()
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { syncSessions(it) }
 
+    override fun onListenerDisconnected() { connected = false }
+
     override fun onListenerConnected() {
+        connected = true
         val m = getSystemService(MEDIA_SESSION_SERVICE) as MediaSessionManager
         msm = m
         // Di SystemUI cukup komponen null (SystemUI punya MEDIA_CONTENT_CONTROL).
@@ -144,6 +148,14 @@ class IslandNotificationListener : NotificationListenerService() {
             sbn.packageName.contains("clock", true) ||
                 n.category == "stopwatch"
             )
+        // Perekam layar / suara: titik merah + waktu rekaman, tombol Berhenti dari notifikasinya.
+        val lp = sbn.packageName.lowercase()
+        val isRec = recWords.any { lp.contains(it) } ||
+            (try { n.channelId.orEmpty().lowercase().contains("record") } catch (_: Throwable) { false })
+        if (isRec && !chrono && !isCall) {
+            chrono = true
+            chronoWhen = if (n.`when` > 0) n.`when` else sbn.postTime
+        }
         Dbg.d { "notif pkg=${sbn.packageName} cat=${n.category} flags=${n.flags} chrono=$chrono clock=$isClock" }
         if (!chrono && !isCall && (n.flags and Notification.FLAG_ONGOING_EVENT) != 0) {
             // Stopwatch/timer aplikasi jam sering memakai tampilan kustom berisi Chronometer.
@@ -202,7 +214,7 @@ class IslandNotificationListener : NotificationListenerService() {
             text
         ).firstOrNull { !junk(it) } ?: ""
         when {
-            chrono || isCall || isClock || ongoingAct -> {
+            chrono || isCall || isClock || ongoingAct || isRec -> {
                 val item = IslandItem(
                     sbn.key,
                     if (isCall) Kind.CALL else Kind.TIMER,
@@ -211,6 +223,7 @@ class IslandNotificationListener : NotificationListenerService() {
                 )
                 item.icon = firstIco ?: icon
                 item.icon2 = secondIco
+                item.rec = isRec
                 item.chipText = chipText
                 item.tap = n.contentIntent
                 item.pkg = sbn.packageName
@@ -337,6 +350,7 @@ class IslandNotificationListener : NotificationListenerService() {
     } catch (_: Throwable) { "" }
 
     /** Opsional: settings put system zest_island_all_notifs 1 -> semua notifikasi tampil di island. */
+    private val recWords = arrayOf("screenrecord", "screen_record", "smartcapture", "voicenote", "voicerecorder", "soundrecorder", "recorder")
     private val phonePkgs = arrayOf("com.samsung.android.incallui", "com.android.incallui", "com.google.android.dialer",
         "com.samsung.android.dialer", "com.android.server.telecom", "com.android.phone")
     private fun isPhoneApp(p: String) = p in phonePkgs

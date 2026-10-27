@@ -155,6 +155,15 @@ class IslandAccessibilityService : AccessibilityService() {
             disableSelf()
             return
         }
+        // Akses notifikasi ikut diaktifkan otomatis (dan dipaksa tersambung) bila belum.
+        try {
+            if (AutoEnable.canWrite(this) && !IslandNotificationListener.connected) {
+                AutoEnable.run(this)
+                handler.postDelayed({
+                    if (!IslandNotificationListener.connected) AutoEnable.rebindListener(this)
+                }, 3000)
+            }
+        } catch (_: Throwable) {}
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         view = IslandView(this)
         view.onToggle = { setExpanded(!expanded) }

@@ -25,8 +25,20 @@ object AutoEnable {
             add(cr, "enabled_accessibility_services", A11Y)
             Settings.Secure.putInt(cr, "accessibility_enabled", 1)
             add(cr, "enabled_notification_listeners", NL)
+            rebindListener(c)
             a11yOn(c) && listenerOn(c)
         } catch (_: SecurityException) { false }
+    }
+
+    /** Paksa sistem memuat ulang listener setelah Settings.Secure diubah (tanpa ini kadang baru aktif setelah reboot). */
+    fun rebindListener(c: Context) {
+        try {
+            val cn = android.content.ComponentName(c, IslandNotificationListener::class.java)
+            val pm = c.packageManager
+            pm.setComponentEnabledSetting(cn, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
+            pm.setComponentEnabledSetting(cn, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
+            android.service.notification.NotificationListenerService.requestRebind(cn)
+        } catch (_: Throwable) {}
     }
 
     private fun has(cr: ContentResolver, key: String, comp: String) =

@@ -21,6 +21,7 @@ class IslandItem(
     val seq: Long = IslandHub.nextSeq()
     var art: Bitmap? = null
     var icon: Drawable? = null
+    var rec: Boolean = false               // sedang merekam (layar / suara)
     var icon2: Drawable? = null            // ikon kedua (mis. logo tim kedua)
     var chipText: String = ""              // teks chip Ongoing Activity (mis. skor "1-0")
     var whenMs: Long = 0L        // dasar chronometer (jam dinding, ms)
